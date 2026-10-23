@@ -1,0 +1,367 @@
+<title>Lavender Agent Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one long engineering sheet. Thesis, system diagram, step-by-step workflow, then six reference panels. */
+:root {
+  --bg: #f6f5f9;
+  --paper: #ffffff;
+  --ink: #1d1b26;
+  --muted: #5d5a6d;
+  --line: #dcd9e6;
+  --llm: #6a4fc4;        /* anything the model does */
+  --llm-soft: #ece7fb;
+  --code: #1f6f6b;       /* anything code decides */
+  --code-soft: #e1f1ef;
+  --warn: #9a5b12;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15141b; --paper: #1d1c25; --ink: #ecebf3; --muted: #a6a3b8; --line: #34323f;
+    --llm: #b4a2f5; --llm-soft: #2b2540; --code: #6fcbc3; --code-soft: #19302e; --warn: #e0a85a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15141b; --paper: #1d1c25; --ink: #ecebf3; --muted: #a6a3b8; --line: #34323f;
+  --llm: #b4a2f5; --llm-soft: #2b2540; --code: #6fcbc3; --code-soft: #19302e; --warn: #e0a85a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 48px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2rem, 5vw, 3.1rem); line-height: 1.05; }
+h2 { font-size: 1.55rem; }
+h3 { font-size: 1.12rem; }
+p { margin: 0; }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+.eyebrow { font-family: var(--mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
+
+/* header */
+header { display: grid; gap: 18px; }
+.thesis { font-size: 1.15rem; max-width: 62ch; color: var(--muted); }
+.thesis strong { color: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 0.9rem; }
+.key { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 14px; height: 14px; border-radius: 3px; border: 2px solid; }
+.sw.llm { background: var(--llm-soft); border-color: var(--llm); }
+.sw.code { background: var(--code-soft); border-color: var(--code); }
+.stack { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-family: var(--mono); font-size: 0.8rem; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); }
+
+section { display: grid; gap: 18px; }
+.sec-head { display: grid; gap: 4px; }
+.sec-head p { color: var(--muted); max-width: 70ch; }
+
+/* diagram */
+.diagram { overflow-x: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.diagram svg { display: block; min-width: 880px; width: 100%; height: auto; }
+svg text { font-family: var(--body); fill: var(--ink); }
+svg .t-title { font-family: var(--display); font-weight: 700; font-size: 15px; }
+svg .t-sub { font-size: 12px; fill: var(--muted); }
+svg .t-mono { font-family: var(--mono); font-size: 11.5px; }
+svg .t-arrow { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+svg .box { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+svg .box-code { fill: var(--code-soft); stroke: var(--code); stroke-width: 1.5; }
+svg .box-llm { fill: var(--llm-soft); stroke: var(--llm); stroke-width: 1.5; }
+svg .box-ext { fill: var(--paper); stroke: var(--llm); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .pill { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+svg .edge { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .edge-llm { stroke: var(--llm); stroke-width: 1.8; fill: none; }
+svg .head { fill: var(--muted); }
+svg .head-llm { fill: var(--llm); }
+
+/* workflow */
+.flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; counter-reset: step; }
+.step { counter-increment: step; background: var(--paper); border: 1px solid var(--line); border-top: 4px solid var(--code); border-radius: 8px; padding: 12px 14px 14px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.step.llm { border-top-color: var(--llm); }
+.step .n { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.step .n::before { content: counter(step, decimal-leading-zero); }
+.step h3 { font-size: 1.02rem; }
+.step p { font-size: 0.88rem; color: var(--muted); }
+.tag { font-family: var(--mono); font-size: 0.7rem; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+.tag.llm { background: var(--llm-soft); color: var(--llm); }
+.tag.code { background: var(--code-soft); color: var(--code); }
+.outcome { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 0.9rem; color: var(--muted); }
+.outcome b { color: var(--ink); font-weight: 600; }
+
+/* panels */
+.panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.panel { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.panel ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 0.92rem; }
+.panel li::marker { color: var(--muted); }
+.panel .say { font-size: 0.88rem; border-left: 3px solid var(--llm); padding: 6px 10px; background: var(--llm-soft); border-radius: 0 6px 6px 0; }
+.say b { font-weight: 600; }
+
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; font-family: var(--mono); }
+.tbl { overflow-x: auto; }
+
+.nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.num-tile { border-top: 2px solid var(--ink); padding-top: 8px; display: grid; gap: 2px; }
+.num-tile .v { font-family: var(--display); font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.num-tile .l { font-size: 0.85rem; color: var(--muted); }
+footer { font-size: 0.85rem; color: var(--muted); }
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">Lavender AI · Autonomous Document Agent</span>
+  <h1>Lavender: a plain request in, a checked Word document out</h1>
+  <p class="thesis">The agent plans the sections, writes each one, checks every fact against the request, reviews and repairs its own work, and only then renders the <code>.docx</code>. <strong>The LLM proposes; code decides.</strong></p>
+  <div class="legend">
+    <span class="key"><span class="sw llm"></span>LLM step (Groq call, JSON out)</span>
+    <span class="key"><span class="sw code"></span>Code step (deterministic, tested offline)</span>
+  </div>
+  <div class="stack" aria-label="Technologies">
+    <span class="chip">Python 3.10+</span><span class="chip">FastAPI + Uvicorn</span><span class="chip">Pydantic v2</span>
+    <span class="chip">pydantic-settings</span><span class="chip">Groq SDK · gpt-oss-120b / 20b</span>
+    <span class="chip">python-docx</span><span class="chip">pytest + FakeLLM</span><span class="chip">HTML/CSS/JS chat UI</span>
+  </div>
+</header>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">1 · Architecture</span>
+    <h2>Four layers, one place that decides the outcome</h2>
+    <p>The API layer only translates HTTP. <code>AgentPipeline</code> owns the run and is the only code that sets success, partial or failed. Every model call goes through one client that paces tokens and validates JSON.</p>
+  </div>
+  <div class="diagram">
+    <svg viewBox="0 0 960 470" role="img" aria-label="Architecture diagram: browser to FastAPI to agent pipeline, which calls the LLM client and Groq, then renders a docx served back through FastAPI">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head"/></marker>
+        <marker id="ahl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head-llm"/></marker>
+      </defs>
+
+      <!-- clients -->
+      <rect class="box" x="20" y="40" width="170" height="80" rx="8"/>
+      <text class="t-title" x="34" y="66">Lavender chat UI</text>
+      <text class="t-sub" x="34" y="86">static/ · plain HTML/JS</text>
+      <text class="t-sub" x="34" y="104">plan ✓/✕, warnings, link</text>
+      <rect class="box" x="20" y="150" width="170" height="70" rx="8"/>
+      <text class="t-title" x="34" y="176">Swagger / client</text>
+      <text class="t-sub" x="34" y="196">/docs · any HTTP caller</text>
+
+      <!-- fastapi -->
+      <rect class="box-code" x="240" y="40" width="180" height="250" rx="8"/>
+      <text class="t-title" x="254" y="66">FastAPI app</text>
+      <text class="t-sub" x="254" y="84">main.py · routes only</text>
+      <rect class="pill" x="254" y="100" width="152" height="26" rx="13"/><text class="t-mono" x="266" y="117">POST /agent</text>
+      <rect class="pill" x="254" y="134" width="152" height="26" rx="13"/><text class="t-mono" x="266" y="151">GET /documents/{name}</text>
+      <rect class="pill" x="254" y="168" width="152" height="26" rx="13"/><text class="t-mono" x="266" y="185">GET /health</text>
+      <text class="t-sub" x="254" y="222">config.py: typed .env,</text>
+      <text class="t-sub" x="254" y="238">checked at startup</text>
+      <text class="t-sub" x="254" y="262">schemas.py: Pydantic,</text>
+      <text class="t-sub" x="254" y="278">extra="forbid"</text>
+
+      <!-- pipeline -->
+      <rect class="box-code" x="470" y="40" width="250" height="250" rx="8"/>
+      <text class="t-title" x="484" y="66">AgentPipeline</text>
+      <text class="t-sub" x="484" y="84">agent/pipeline.py · owns the run</text>
+      <text class="t-mono" x="484" y="112">guardrails.py   screens, plan rules</text>
+      <text class="t-mono" x="484" y="134">planner.py      analyze, re-plan</text>
+      <text class="t-mono" x="484" y="156">executor.py     tasks in order</text>
+      <text class="t-mono" x="484" y="178">tools.py        2 writing tools</text>
+      <text class="t-mono" x="484" y="200">grounding.py    facts, gate</text>
+      <text class="t-mono" x="484" y="222">review.py       review, repair</text>
+      <text class="t-sub" x="484" y="256">Decides: success · partial · failed</text>
+      <text class="t-sub" x="484" y="274">and the HTTP status</text>
+
+      <!-- llm client -->
+      <rect class="box-llm" x="770" y="40" width="170" height="150" rx="8"/>
+      <text class="t-title" x="784" y="66">LLMClient</text>
+      <text class="t-sub" x="784" y="84">llm.py</text>
+      <text class="t-mono" x="784" y="108">TokenPacer</text>
+      <text class="t-mono" x="784" y="128">RequestBudget</text>
+      <text class="t-mono" x="784" y="148">schema retries ≤2</text>
+      <text class="t-mono" x="784" y="168">429 retry-after</text>
+
+      <rect class="box-ext" x="770" y="230" width="170" height="60" rx="8"/>
+      <text class="t-title" x="784" y="256">Groq API</text>
+      <text class="t-sub" x="784" y="276">gpt-oss · JSON mode</text>
+
+      <!-- docx + outputs -->
+      <rect class="box-code" x="470" y="330" width="250" height="70" rx="8"/>
+      <text class="t-title" x="484" y="356">DocxRenderer</text>
+      <text class="t-sub" x="484" y="376">docx_builder.py · python-docx</text>
+      <text class="t-sub" x="484" y="392">atomic save, reopen to verify</text>
+      <rect class="box" x="240" y="330" width="180" height="70" rx="8"/>
+      <text class="t-title" x="254" y="356">outputs/*.docx</text>
+      <text class="t-sub" x="254" y="376">only names the agent made</text>
+      <text class="t-sub" x="254" y="392">are served</text>
+
+      <!-- edges -->
+      <path class="edge" d="M190 80 H238" marker-end="url(#ah)"/>
+      <path class="edge" d="M190 185 H238" marker-end="url(#ah)"/>
+      <path class="edge" d="M420 113 H468" marker-end="url(#ah)"/>
+      <text class="t-arrow" x="424" y="105">run()</text>
+      <path class="edge-llm" d="M720 113 H768" marker-end="url(#ahl)"/>
+      <text class="t-arrow" x="722" y="105">chat_json</text>
+      <path class="edge-llm" d="M855 190 V228" marker-end="url(#ahl)"/>
+      <path class="edge" d="M595 290 V328" marker-end="url(#ah)"/>
+      <text class="t-arrow" x="602" y="314">sections</text>
+      <path class="edge" d="M470 365 H422" marker-end="url(#ah)"/>
+      <path class="edge" d="M330 330 V292" marker-end="url(#ah)"/>
+      <text class="t-arrow" x="336" y="316">download</text>
+
+      <text class="t-sub" x="20" y="440">Tests swap the Groq transport for FakeLLM, so pacing, retries, budgets, planning, grounding, review, gate, rendering and the API all run offline.</text>
+    </svg>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">2 · Agent workflow</span>
+    <h2>Ten steps per request, in this order</h2>
+    <p>Each step can stop the run with a clear reason. A typical run is 5 to 13 model calls.</p>
+  </div>
+  <ol class="flow">
+    <li class="step"><span class="n"><span class="tag code">code · 0 tokens</span></span><h3>Screen</h3><p>Length limit, prompt-injection and unsafe keyword screens. Refused here → 400.</p></li>
+    <li class="step llm"><span class="n"><span class="tag llm">LLM · 1 call</span></span><h3>Analyze + plan</h3><p>Type, category (record or planning), requested items, facts, missing info, assumptions, tasks. Not a document → 422.</p></li>
+    <li class="step"><span class="n"><span class="tag code">code (+1 re-plan)</span></span><h3>Validate plan</h3><p>2–6 tasks, known tools, no cycles, every requested item covered. One re-plan with the exact errors.</p></li>
+    <li class="step llm"><span class="n"><span class="tag llm">LLM · 1 per section</span></span><h3>Execute tasks</h3><p>Dependency order. A task gets its prerequisites' checked content.</p></li>
+    <li class="step"><span class="n"><span class="tag code">code</span></span><h3>Ground</h3><p>A record must appear in the request. An unsupported owner, date or value becomes "To be confirmed".</p></li>
+    <li class="step"><span class="n"><span class="tag code">code</span></span><h3>Completeness</h3><p>A requested section with no source facts is marked; a required one with nothing supported fails.</p></li>
+    <li class="step llm"><span class="n"><span class="tag llm">LLM · chunked</span></span><h3>Review</h3><p>Unsupported facts, missing items, unlabelled proposals, contradictions, wrong heading.</p></li>
+    <li class="step llm"><span class="n"><span class="tag llm">LLM · ≤3 sections</span></span><h3>Repair + verify</h3><p>Rewrite with the issues, re-ground in code, review again. Unresolved in a required section → fail.</p></li>
+    <li class="step"><span class="n"><span class="tag code">code</span></span><h3>Dedupe + final gate</h3><p>A repeated record stays where its type belongs. Every item covered, every proposal labelled.</p></li>
+    <li class="step"><span class="n"><span class="tag code">code</span></span><h3>Render</h3><p>Build the Word file, save atomically, reopen and check the headings. Return the link.</p></li>
+  </ol>
+  <div class="outcome">
+    <span><b>success</b> every planned section delivered</span>
+    <span><b>partial</b> an optional section dropped or a requested item had no facts</span>
+    <span><b>failed</b> no document and no link</span>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">3 · The parts in detail</span>
+    <h2>Planning, LLM, tools, documents, API</h2>
+  </div>
+  <div class="panels">
+
+    <article class="panel">
+      <span class="eyebrow">Planning logic</span>
+      <h3>The model plans, code validates</h3>
+      <ul>
+        <li>One <b>analyze</b> call returns the request's structure and a task list. Each task names a tool, a heading, its dependencies and the requested items it <b>covers</b>.</li>
+        <li>Code checks: 2–6 tasks, known tools, unique IDs, dependencies exist, no cycles, every requested item covered.</li>
+        <li>Invalid → <b>one re-plan</b> with the exact errors. Still too long → code merges neighbouring same-tool tasks that don't depend on each other.</li>
+        <li>A planned "Assumptions" task is folded into the automatic Assumptions section, so it never appears twice.</li>
+        <li><b>Required</b> is set by code: a task is required only if it covers a requested item.</li>
+      </ul>
+      <p class="say"><b>Why:</b> the agent picks its own plan, but a bad plan never reaches the writing step.</p>
+    </article>
+
+    <article class="panel">
+      <span class="eyebrow">LLM integration</span>
+      <h3>One client, strict JSON, hard budgets</h3>
+      <ul>
+        <li>Groq SDK, <code>openai/gpt-oss-120b</code> (20b as a drop-in fallback). JSON mode plus the Pydantic schema in the prompt.</li>
+        <li>Every reply is parsed into a strict model (<code>extra="forbid"</code>). Invalid or cut-off JSON is retried at most twice, with the validation error as feedback.</li>
+        <li>The request is passed only inside <code>&lt;request&gt;</code> tags, as data.</li>
+        <li>Process-wide <b>TokenPacer</b> books tokens ahead of each call to stay under Groq's 8K tokens/min. 429s honour <code>retry-after</code>, at most 3 waits.</li>
+        <li>An over-cap call is never sent, and a "too large" error is never resent.</li>
+      </ul>
+      <div class="tbl"><table>
+        <tr><th>Limit</th><th>Value</th></tr>
+        <tr><td>Tokens per request (maximum)</td><td class="num">40,000</td></tr>
+        <tr><td>Tokens per call</td><td class="num">6,500</td></tr>
+        <tr><td>Pacer window</td><td class="num">7,500 / 60 s</td></tr>
+        <tr><td>Request deadline</td><td class="num">480 s</td></tr>
+        <tr><td>Call timeout</td><td class="num">30 s</td></tr>
+      </table></div>
+    </article>
+
+    <article class="panel">
+      <span class="eyebrow">Tool usage</span>
+      <h3>Two tools the planner chooses from</h3>
+      <div class="tbl"><table>
+        <tr><th>Tool</th><th>Produces</th><th>Used for</th></tr>
+        <tr><td><code>write_section</code></td><td>Paragraphs + typed bullet items</td><td>Summary, decisions, risks, phases</td></tr>
+        <tr><td><code>build_table</code></td><td>Rows with owner, due, value</td><td>Action items, schedule, budget</td></tr>
+      </table></div>
+      <ul>
+        <li>Each tool has its own output schema and a converter into a common <code>Section</code>.</li>
+        <li>The planner picks a tool by name for every task; an unknown tool makes the plan invalid.</li>
+        <li>Repair rewrites a section with the same tool it was written with.</li>
+      </ul>
+      <p class="say"><b>Why only two:</b> fewer choices for a small model, and every tool output is something code can check.</p>
+    </article>
+
+    <article class="panel">
+      <span class="eyebrow">Document generation</span>
+      <h3>Records vs proposals, then python-docx</h3>
+      <ul>
+        <li>Every item is a <b>record</b> (a fact from the request) or a <b>proposal</b> (the agent's suggestion).</li>
+        <li>A proposal must carry a visible label: Proposed, Recommended, Potential or Illustrative. A guess cites an assumption, e.g. "Assumption A1".</li>
+        <li>An automatic Assumptions section lists what the agent assumed, so nothing invented is hidden.</li>
+        <li>The renderer writes the title, headings, bullets and tables, hides unused table columns, and hides a value that only repeats the owner.</li>
+        <li>Saved atomically, reopened to verify the headings, served only by names the agent created.</li>
+      </ul>
+      <p class="say"><b>Why:</b> the LLM only ever returns JSON text; the file itself is built locally by code.</p>
+    </article>
+
+    <article class="panel">
+      <span class="eyebrow">API design</span>
+      <h3>Three endpoints, honest status codes</h3>
+      <div class="tbl"><table>
+        <tr><th>Endpoint</th><th>Purpose</th></tr>
+        <tr><td><code>POST /agent</code></td><td><code>{"request": "..."}</code> → status, message, plan with every step ✓/✕/–, warnings, usage, <code>document_url</code></td></tr>
+        <tr><td><code>GET /documents/{name}</code></td><td>Download; unknown names and path tricks → 404</td></tr>
+        <tr><td><code>GET /health</code></td><td>Liveness and model name, no LLM call</td></tr>
+      </table></div>
+      <div class="tbl"><table>
+        <tr><th>HTTP</th><th>Status</th><th>Meaning</th></tr>
+        <tr><td class="num">200</td><td>success</td><td>Every section delivered</td></tr>
+        <tr><td class="num">200</td><td>partial</td><td>Delivered, with the reason in warnings</td></tr>
+        <tr><td class="num">400</td><td>failed</td><td>Refused by an input screen</td></tr>
+        <tr><td class="num">422</td><td>failed</td><td>Not a document request, or a bad body</td></tr>
+        <tr><td class="num">502</td><td>failed</td><td>No valid document; no link returned</td></tr>
+      </table></div>
+    </article>
+
+    <article class="panel">
+      <span class="eyebrow">Guardrails</span>
+      <h3>Four layers, all enforced in code</h3>
+      <ul>
+        <li><b>Input:</b> length and keyword screens before any token is spent.</li>
+        <li><b>Plan:</b> validation and one re-plan before any section is written.</li>
+        <li><b>Grounding:</b> records must quote the request; unknown assumption IDs are stripped.</li>
+        <li><b>Final gate:</b> every requested item covered, every proposal labelled, no placeholders in required sections. Any failure means no document.</li>
+      </ul>
+      <p class="say"><b>Rule I kept:</b> judgement goes in prompts, checkable rules go in code with tests. I never loosened a check or a limit to make a run pass.</p>
+    </article>
+
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">4 · Measured</span>
+    <h2>What a run costs on the Groq free tier</h2>
+  </div>
+  <div class="nums">
+    <div class="num-tile"><span class="v">101</span><span class="l">offline tests, about 1.3 s, no API key</span></div>
+    <div class="num-tile"><span class="v">9–24K</span><span class="l">tokens per measured run</span></div>
+    <div class="num-tile"><span class="v">2–6 min</span><span class="l">per document, mostly rate-limit waits</span></div>
+    <div class="num-tile"><span class="v">5–13</span><span class="l">LLM calls per run</span></div>
+  </div>
+  <footer>Known limits: no memory or RAG, grounding is a substring check, keyword screens are not a classifier, a single process shares one pacer. Details in README.md and docs/DECISIONS.md.</footer>
+</section>
+
+</div>

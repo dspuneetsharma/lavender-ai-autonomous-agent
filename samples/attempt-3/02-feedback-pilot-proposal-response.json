@@ -1,0 +1,80 @@
+{
+  "http_status": 200,
+  "status": "success",
+  "message": "Created 'Customer Feedback Pilot Proposal' with 3 sections (3/3 planned tasks done).",
+  "title": "Customer Feedback Pilot Proposal",
+  "document_url": "http://127.0.0.1:8000/documents/4ab4d5fd130e441b9cca4d3d12d886ed-customer-feedback-pilot-proposal.docx",
+  "plan": [
+    {
+      "id": "T1",
+      "title": "Assumptions",
+      "tool": "write_section",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "T2",
+      "title": "Proposed Approach and Action Plan",
+      "tool": "write_section",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "T3",
+      "title": "Risks and Mitigations",
+      "tool": "write_section",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "ground",
+      "title": "Check facts against the request",
+      "tool": "code",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "review",
+      "title": "Review sections",
+      "tool": "code",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "repair",
+      "title": "Repair and verify flagged sections",
+      "tool": "code",
+      "required": true,
+      "status": "done",
+      "detail": "no material issues"
+    },
+    {
+      "id": "gate",
+      "title": "Completeness gate",
+      "tool": "code",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "render",
+      "title": "Render the Word document",
+      "tool": "code",
+      "required": true,
+      "status": "done",
+      "detail": null
+    }
+  ],
+  "warnings": [],
+  "usage": {
+    "llm_calls": 5,
+    "failed_attempts": 0,
+    "tokens_used": 9632,
+    "duration_s": 120.78
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "http_status": 502,
+  "status": "failed",
+  "message": "Unresolved issue in required section 'Conclusion': repair left no supported content",
+  "title": "Customer Feedback Pilot Proposal",
+  "document_url": null,
+  "plan": [
+    {
+      "id": "T1",
+      "title": "Practical Approach",
+      "tool": "write_section",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "T2",
+      "title": "Five‑Day Action Plan & Suggested Roles",
+      "tool": "build_table",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "T3",
+      "title": "Risks and Mitigations",
+      "tool": "write_section",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "T4",
+      "title": "Conclusion",
+      "tool": "write_section",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "ground",
+      "title": "Check facts against the request",
+      "tool": "code",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "review",
+      "title": "Review sections",
+      "tool": "code",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "repair",
+      "title": "Repair and verify flagged sections",
+      "tool": "code",
+      "required": true,
+      "status": "failed",
+      "detail": "'Conclusion': repair left no supported content"
+    },
+    {
+      "id": "gate",
+      "title": "Completeness gate",
+      "tool": "code",
+      "required": true,
+      "status": "skipped",
+      "detail": null
+    },
+    {
+      "id": "render",
+      "title": "Render the Word document",
+      "tool": "code",
+      "required": true,
+      "status": "skipped",
+      "detail": null
+    }
+  ],
+  "warnings": [
+    "'Conclusion': Section T4 (Conclusion) is empty with no paragraphs or items, providing no content and adding unnecessary length to the one-page proposal."
+  ],
+  "usage": {
+    "llm_calls": 8,
+    "failed_attempts": 0,
+    "tokens_used": 14364,
+    "duration_s": 182.42
+  }
+}

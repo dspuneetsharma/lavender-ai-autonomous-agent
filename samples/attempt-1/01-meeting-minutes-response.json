@@ -1,0 +1,91 @@
+{
+  "http_status": 200,
+  "status": "partial",
+  "message": "Created 'Product Roadmap Review Meeting Minutes' with 3 sections (4/4 planned tasks done). Some content is incomplete: Optional section 'Summary' was removed.",
+  "title": "Product Roadmap Review Meeting Minutes",
+  "document_url": "http://127.0.0.1:8000/documents/11346b88499545b6b11d4e1fffa27e7f-product-roadmap-review-meeting-minutes.docx",
+  "plan": [
+    {
+      "id": "T1",
+      "title": "Attendees",
+      "tool": "write_section",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "T2",
+      "title": "Summary",
+      "tool": "write_section",
+      "required": false,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "T3",
+      "title": "Decisions",
+      "tool": "write_section",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "T4",
+      "title": "Action Items",
+      "tool": "build_table",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "ground",
+      "title": "Check facts against the request",
+      "tool": "code",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "review",
+      "title": "Review sections",
+      "tool": "code",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "repair",
+      "title": "Repair and verify flagged sections",
+      "tool": "code",
+      "required": true,
+      "status": "done",
+      "detail": "no material issues"
+    },
+    {
+      "id": "gate",
+      "title": "Completeness gate",
+      "tool": "code",
+      "required": true,
+      "status": "done",
+      "detail": null
+    },
+    {
+      "id": "render",
+      "title": "Render the Word document",
+      "tool": "code",
+      "required": true,
+      "status": "done",
+      "detail": null
+    }
+  ],
+  "warnings": [
+    "Optional section 'Summary' had no supported content and was removed.",
+    "'Decisions': The Decisions section (T3) includes attendee records, which are not part of the requested decisions list and are irrelevant to this section."
+  ],
+  "usage": {
+    "llm_calls": 6,
+    "failed_attempts": 0,
+    "tokens_used": 10459,
+    "duration_s": 122.36
+  }
+}

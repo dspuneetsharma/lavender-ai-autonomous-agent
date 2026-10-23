@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lavender</title>
+  <link rel="icon" type="image/svg+xml" href="lavender.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><img class="logo" src="lavender.svg" alt="">Lavender</div>
+      <div class="status" id="status" data-state="checking">
+        <span class="dot" aria-hidden="true"></span><span id="status-text">Connecting…</span>
+      </div>
+    </header>
+
+    <main class="chat" id="chat" aria-live="polite">
+      <section class="welcome" id="welcome">
+        <img class="welcome-icon" src="lavender.svg" alt="">
+        <h1>Lavender</h1>
+        <p class="tagline">Your document generating assistant. What can I do for you?</p>
+        <p>
+          Describe the document in plain language. I plan the sections, write each one, check every
+          fact against your request, and return a Word file.
+        </p>
+        <div class="chips">
+          <button type="button" class="chip" data-sample="minutes">Meeting minutes example</button>
+          <button type="button" class="chip" data-sample="plan">Project plan example</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="composer">
+      <div class="composer-box">
+        <textarea id="input" rows="1" placeholder="e.g. Create meeting minutes for our Monday product sync…"
+                  aria-label="Describe the document you need"></textarea>
+        <button type="button" id="send" class="send" aria-label="Send request" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 20.5 3 13 21l-2.2-7.3L3 11.5Z"/></svg>
+        </button>
+      </div>
+      <div class="hint">
+        <span>Enter to send · Shift+Enter for a new line</span>
+        <span id="counter"></span>
+      </div>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

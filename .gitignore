@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environment
+.venv/
+
+# Secrets
+.env
+
+# Generated documents
+outputs/
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

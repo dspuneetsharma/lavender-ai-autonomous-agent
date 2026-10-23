@@ -1,0 +1,7 @@
+Create meeting minutes for the product roadmap review held on 22 October 2026. Attendees: Abhinav (Product Manager), Nikita (Engineering Lead), and Raghav (Designer).
+
+Decisions: launch mobile app v2 on 15 November 2026 and defer the analytics redesign to Q1 2027.
+
+Action items: Nikita will complete integration testing by 5 November. Raghav will deliver final designs by 28 October. Abhinav will notify stakeholders; no deadline was agreed.
+
+Include attendees, a summary, decisions, and an action-items table with owners and deadlines.
