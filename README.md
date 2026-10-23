@@ -7,6 +7,8 @@
 An autonomous AI agent that turns a plain-language request ("Create meeting minutes for…", "Draft a proposal for…") into a finished,
 fact-checked Word document.
 
+![Lavender chat UI](docs/images/lavender-ui.webp)
+
 ## Why I built it
 
 LLMs write fluent documents, but they also invent owners, dates and decisions that nobody agreed on.
