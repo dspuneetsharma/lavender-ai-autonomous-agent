@@ -3,7 +3,6 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688)
 ![Tests](https://img.shields.io/badge/tests-101%20passing-brightgreen)
-![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 An autonomous AI agent that turns a plain-language request ("Create meeting minutes for…", "Draft a proposal for…") into a finished,
 fact-checked Word document.
@@ -296,11 +295,8 @@ tests/              101 offline tests (pytest + FakeLLM)
 samples/            Demo requests, and per attempt the JSON response and Word file
 docs/DECISIONS.md   Decisions, rejected alternatives, design Q&A
 .env.example        Every setting, with comments
-LICENSE             MIT
 ```
 
 ## Author
 
 **Puneet Sharma** · [GitHub @dspuneetsharma](https://github.com/dspuneetsharma)
-
-Licensed under the [MIT License](LICENSE).
