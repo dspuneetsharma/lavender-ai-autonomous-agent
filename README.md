@@ -220,6 +220,17 @@ below.
 Exact requests, JSON responses and Word files are in [`samples/`](samples/). Each attempt has its own
 folder; earlier attempts are kept, not overwritten.
 
+#### In the UI: sales meeting minutes (`openai/gpt-oss-20b`)
+
+Request: [`samples/03-sales-minutes-request.txt`](samples/03-sales-minutes-request.txt). Result:
+**success**, 3/3 planned sections, 5 LLM calls, 9,143 tokens, 121.3 s. The plan list shows each
+LLM-written section, then the code steps: fact grounding, review, repair (no material issues),
+completeness gate and rendering.
+
+![Result card for the sales meeting minutes](docs/images/sales-minutes-result.webp)
+
+#### Measured attempts (`openai/gpt-oss-120b`)
+
 | Demo | Attempt | Status | LLM calls | Tokens | Duration | Outcome |
 |---|---|---|---|---|---|---|
 | 1. Meeting minutes | `attempt-1` | partial | 6 | 10,459 | 122.4 s | Summary dropped; Attendees and Decisions each repeated all 8 records → section-scope fixes |
@@ -274,7 +285,7 @@ part of `samples/`.
 - **Daily quota on the free tier:** 200K tokens per day for `gpt-oss-120b`, about 8–20 documents (measured
   runs use about 9–24K tokens; failed runs count too). When it runs out, Groq answers 429 with long waits and
   the agent stops at the deadline with a clear reason. `GROQ_MODEL=openai/gpt-oss-20b` is a drop-in
-  fallback with its own quota, but every result above was measured on 120b.
+  fallback with its own quota. The attempts table was measured on 120b; the UI screenshot run is on 20b.
 - **Grounding is a substring check:** a true fact written differently (another date format) becomes
   "To be confirmed". Only structured items are grounded; free paragraphs rely on the prompt rules and the
   review.
