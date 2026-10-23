@@ -7,7 +7,16 @@
 An autonomous AI agent that turns a plain-language request ("Create meeting minutes for…", "Draft a proposal for…") into a finished,
 fact-checked Word document.
 
-![Lavender chat UI](docs/images/lavender-ui.webp)
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/lavender-ui.webp" alt="Lavender chat UI"></td>
+    <td width="50%"><img src="docs/images/sales-minutes-result.webp" alt="Result card for the sales meeting minutes"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Chat UI</em></td>
+    <td align="center"><em>A finished request: plan, checks and Word download</em></td>
+  </tr>
+</table>
 
 ## Why I built it
 
