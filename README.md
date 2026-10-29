@@ -2,7 +2,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688)
-![Tests](https://img.shields.io/badge/tests-101%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-132%20passing-brightgreen)
 
 An autonomous AI agent that turns a plain-language request ("Create meeting minutes for…", "Draft a proposal for…") into a finished,
 fact-checked Word document.
@@ -29,7 +29,7 @@ document that fails its own checks is never delivered.
 - Plan → write → ground → review → repair → render, with every LLM output validated by strict Pydantic schemas.
 - Four layers of guardrails enforced in code: input screens, plan validation, fact grounding and a final gate.
 - Token budgeting and a process-wide rate pacer built for a free-tier LLM API.
-- 101 offline tests with a fake LLM, plus measured live runs with the exact inputs and outputs in `samples/`.
+- 132 offline tests with a fake LLM, plus measured live runs with the exact inputs and outputs in `samples/`.
 
 ## How it works
 
@@ -200,7 +200,7 @@ the old 300 s deadline (see DECISIONS.md, "Fix: budget limits sized for the Groq
 
 ### Offline code checks (pytest + FakeLLM)
 
-**101 tests, all passing in about 1.3 s, no warnings, no API key.** FakeLLM replaces only the network
+**132 tests, all passing in about 1.3 s, no warnings, no API key.** FakeLLM replaces only the network
 call, so the real retry, pacing, budget, planning, grounding, review, gate, rendering and API code all
 runs. Tests use code defaults (`.env` is ignored), so results don't depend on the machine.
 
@@ -211,14 +211,15 @@ runs. Tests use code defaults (`.env` is ignored), so results don't depend on th
 | 3. Required task failed or skipped → 502, no link; optional → partial; prerequisites in prompt | `test_pipeline.py` |
 | 4. Bad JSON retried and counted; truncation; 413 not resent | `test_llm.py` |
 | 5. Pacer waits; deadline and ceiling stop calls; over-cap not sent | `test_llm.py` |
-| 6. Grounding: "To be confirmed", removal, proposals, labels, unknown assumptions | `test_grounding.py` |
+| 6. Grounding: "To be confirmed", removal, proposals, labels, unknown assumptions; times, dates and figures in other formats | `test_grounding.py`, `test_facts.py` |
 | 7. Completeness: note + partial, failure cases | `test_completeness.py` |
 | 8. Review: chunking within cap, oversized section, repair + verify, unresolved, incomplete | `test_pipeline.py` |
 | 9. Gate / render failure → no link; docx reopens correctly; unused table columns hidden; path traversal rejected | `test_pipeline.py`, `test_docx.py`, `test_api.py` |
 | Duplicates: a record repeated across sections stays where its type belongs; ties and proposals kept | `test_duplicates.py` |
 
 Regression tests replay each live failure found during development: the 8-section deadline skip, the
-7-task re-plan, the required extra "Conclusion", and the duplicated Assumptions section.
+7-task re-plan, the required extra "Conclusion", the duplicated Assumptions section, and the day plan
+that failed because "8am-12pm" didn't match "8am to 12 pm".
 
 **What these tests do not prove:** the model's writing quality (consistency, relevant assumption
 references, sensible roles, length). That is prompt behaviour and can only be judged on live output,
@@ -295,9 +296,9 @@ part of `samples/`.
   runs use about 9–24K tokens; failed runs count too). When it runs out, Groq answers 429 with long waits and
   the agent stops at the deadline with a clear reason. `GROQ_MODEL=openai/gpt-oss-20b` is a drop-in
   fallback with its own quota. The attempts table was measured on 120b; the UI screenshot run is on 20b.
-- **Grounding is a substring check:** a true fact written differently (another date format) becomes
-  "To be confirmed". Only structured items are grounded; free paragraphs rely on the prompt rules and the
-  review.
+- **Grounding understands formats, not synonyms:** "8am-12pm" matches "8am to 12 pm" and "31 March"
+  matches "March 31", but "end of March" or a reworded name becomes "To be confirmed". Only structured
+  items are grounded; free paragraphs rely on the prompt rules and the review.
 - **Keyword input screens** catch obvious injection and unsafe requests only. They are not a classifier.
 - **Merging over-long plans is by position**, not meaning; it never merges dependent tasks or mixes
   tools.
@@ -313,7 +314,7 @@ part of `samples/`.
 ```
 app/                FastAPI app, settings, LLM wrapper, guardrails, grounding, tools, agent/, docx builder
 static/             Chat UI (Lavender)
-tests/              101 offline tests (pytest + FakeLLM)
+tests/              132 offline tests (pytest + FakeLLM)
 samples/            Demo requests, and per attempt the JSON response and Word file
 docs/DECISIONS.md   Decisions, rejected alternatives, design Q&A
 .env.example        Every setting, with comments

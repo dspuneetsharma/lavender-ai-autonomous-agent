@@ -1,13 +1,15 @@
 """Post-generation guardrails: record-vs-proposal grounding, completeness re-check and the final gate.
 
-Grounding is a conservative substring check against the user's request: a real fact written in a
-different format (e.g. another date style) is treated as unsupported and becomes "To be confirmed".
+Grounding checks facts against the user's request by meaning, not spelling (see `app/facts.py`):
+"8am-12pm" matches "8am to 12 pm", while a time, date, figure or name not in the request becomes
+"To be confirmed".
 """
 
 from collections import Counter
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 
+from app.facts import FactSource
 from app.guardrails import normalize_text
 from app.schemas import Analysis, DocumentCategory, Item, ItemKind, Section
 
@@ -43,6 +45,7 @@ class CompletenessResult:
 class _GroundingContext:
     category: DocumentCategory | None
     source: str
+    facts: FactSource
     known_assumptions: frozenset[str]
 
 
@@ -54,6 +57,7 @@ def ground_sections(sections: Sequence[Section], analysis: Analysis, request_tex
     context = _GroundingContext(
         category=analysis.category,
         source=normalize_text(request_text),
+        facts=FactSource.from_text(request_text),
         known_assumptions=frozenset(assumption.id for assumption in analysis.assumptions),
     )
     result = GroundingResult(sections=[])
@@ -92,7 +96,7 @@ def _ground_item(item: Item, heading: str, context: _GroundingContext, warnings:
         item = item.model_copy(update={"assumption_id": None})
 
     if item.kind == "record" and not (
-        _supported(item.source_quote, context.source) or _supported(item.text, context.source)
+        _quote_supported(item.source_quote, context) or _quote_supported(item.text, context)
     ):
         warnings.append(f"'{heading}': removed {item.type} not in the request: '{_snippet(item.text)}'.")
         return None
@@ -101,7 +105,7 @@ def _ground_item(item: Item, heading: str, context: _GroundingContext, warnings:
         updates: dict[str, str] = {}
         for name in _FACT_FIELDS:
             value = getattr(item, name)
-            if value and not _is_to_be_confirmed(value) and not _supported(value, context.source):
+            if value and not _is_to_be_confirmed(value) and not _value_supported(value, context):
                 updates[name] = TO_BE_CONFIRMED
                 warnings.append(f"'{heading}': {name} '{_snippet(value)}' not in the request; marked TBC.")
         item = item.model_copy(update=updates)
@@ -120,9 +124,17 @@ def _enforced_kind(item: Item, category: DocumentCategory | None) -> ItemKind:
     return item.kind
 
 
-def _supported(value: str | None, source: str) -> bool:
-    if not value:
-        return False
+def _quote_supported(quote: str | None, context: _GroundingContext) -> bool:
+    """A record's quote or text must appear in the request as one run, in any time/date/number format."""
+    return bool(quote) and (_in_source(quote, context.source) or context.facts.supports_quote(quote))
+
+
+def _value_supported(value: str, context: _GroundingContext) -> bool:
+    """An owner/due/value field must only contain facts and words that are in the request."""
+    return _in_source(value, context.source) or context.facts.supports_value(value)
+
+
+def _in_source(value: str, source: str) -> bool:
     needle = normalize_text(value).strip(_EDGE_PUNCTUATION)
     return bool(needle) and needle in source
 

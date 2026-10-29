@@ -601,3 +601,23 @@ The successful migration-plan run had an empty Assumptions section ("No planning
 **Update (plan with one task):** the merged request failed at planning: "The plan must have 2-6 tasks; it has 1", even after one re-plan. The likely cause (no server log was available): the model planned a content task plus an "Assumptions" task, and code folds the latter into the automatic Assumptions section, leaving one task. The re-plan was never told that folding happens. **Fix (code):** a plan with too few tasks now also gets the error "Split the content into more sections; an Assumptions-only section does not count, because it is added automatically." The minimum of 2 tasks was not lowered. 101/101 tests pass; not verified live.
 
 **Update (recording):** with about one migration run of quota left, the recording uses the original request (rehearsal 2 succeeded with it). samples/04 is back to that text.
+
+## Fix: grounding compares facts by meaning, not spelling (code)
+
+A live day-plan request on `gpt-oss-120b` **failed** (7 calls, 11,455 tokens, 122 s): "3 am walk 8am to 12 pm metting then from 7 game". The model wrote the meeting time as "8am-12pm" and "8am to 12pm". Grounding was a substring check, so a space before "pm" or a dash instead of "to" made a true fact "To be confirmed". The review then flagged the missing time, the repair wrote it again, grounding removed it again, and the required section stayed unresolved.
+
+**Fix (new `app/facts.py`, used by `grounding.py`):** both the request and each checked value are turned into tokens, and times, dates and numbers get one standard form:
+- times: "8am", "8 am", "8:00 a.m." → 08:00; "noon" → 12:00; "-", "till", "until" → "to";
+- dates: "March 31", "31st of March", "Mar. 31", "03/31", "2027-03-31" → 31 March (a year is checked separately);
+- numbers: "$40,000", "40000", "40k" → 40000;
+- a bare hour after "from", "at", "by"... or starting a range ("from 7", "8 to 12pm") can be either am or pm, so "7 pm" matches "from 7". A plain count ("3 phases") is never read as a time.
+
+An owner/due/value field is supported if every time, date, number and word in it is in the request. A record's quote must still appear as one run of the request. The old substring check runs first, so nothing that passed before fails now.
+
+- **Still blocked:** invented times ("9am-1pm"), dates ("April 15"), years ("2026" when the request says 2027), figures ("$45,000") and surnames ("Priya Sharma" when the request says "Priya").
+- **Rejected:** an LLM fact checker (a model shouldn't grade its own facts; it costs quota and isn't repeatable); a date-parsing library (a new dependency for a few formats); accepting any number 1–12 as an hour (would let "3 pm" pass from "3 phases").
+- **Revises** the earlier choice of strict substring matching: format-tolerant matching proved necessary on live input, and it stays code with tests.
+- **Code-verified (offline):** 132/132 tests pass, including the live day-plan case. **Not verified live.**
+
+> **Q: Why not let the LLM decide whether "8am-12pm" matches the request?**
+> A: The checker must be independent of the writer, free and repeatable. Code turns every format into one standard form and then compares exactly, so it accepts real facts written differently and still blocks invented ones.

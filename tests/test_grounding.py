@@ -213,6 +213,36 @@ def test_minutes_unsupported_decision_is_removed(minutes_analysis: Analysis) -> 
     assert grounded.warnings == ["'Decisions': removed decision not in the request: 'Hire two engineers'."]
 
 
+DAY_PLAN_REQUEST = "give me a doc of my day plan 3 am walk 8am to 12 pm metting then from 7 game"
+
+
+def test_day_plan_times_written_differently_are_kept(planning_analysis: Analysis) -> None:
+    # Live failure: "8am-12pm" and "7 pm" became "To be confirmed" because the request says "8am to 12 pm"
+    # and "from 7", so the review flagged the meeting time as missing and the run failed.
+    rows = [
+        Item(type="task", kind="record", text="Walk", source_quote="3 am walk", due="3:00 AM"),
+        Item(type="task", kind="record", text="Meeting", source_quote="8am to 12 pm metting", due="8am-12pm"),
+        Item(type="task", kind="record", text="Game", source_quote="from 7 game", due="7 pm"),
+    ]
+    section = Section(task_id="T1", heading="Daily Schedule", covers=["R1"],
+                      table=Table(columns=ColumnLabels(text="Activity", due="Time"), rows=rows))
+
+    grounded = ground_sections([section], planning_analysis, DAY_PLAN_REQUEST)
+
+    assert [row.due for row in grounded.sections[0].table.rows] == ["3:00 AM", "8am-12pm", "7 pm"]
+    assert grounded.warnings == []
+
+
+def test_day_plan_invented_time_is_still_marked_to_be_confirmed(planning_analysis: Analysis) -> None:
+    item = Item(type="task", kind="record", text="Meeting", source_quote="8am to 12 pm metting", due="9am-1pm")
+    section = Section(task_id="T1", heading="Daily Schedule", covers=["R1"], items=[item])
+
+    grounded = ground_sections([section], planning_analysis, DAY_PLAN_REQUEST)
+
+    assert grounded.sections[0].items[0].due == TO_BE_CONFIRMED
+    assert grounded.warnings == ["'Daily Schedule': due '9am-1pm' not in the request; marked TBC."]
+
+
 def test_unknown_assumption_id_is_flagged_and_removed(planning_analysis: Analysis) -> None:
     item = Item(type="task", kind="proposal", text="Train the support team", label="Proposed",
                 assumption_id="A9")
