@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 import threading
 import time
 from collections import deque
@@ -30,6 +31,9 @@ Sleep = Callable[[float], None]
 
 _CONTEXT_LIMIT_MARKERS = ("context_length_exceeded", "reduce the length", "request too large")
 _INVALID_JSON_MARKER = "json_validate_failed"
+# Groq's 429 for a used-up daily quota, e.g. "Rate limit reached ... on tokens per day (TPD) ...".
+_DAILY_LIMIT_MARKERS = ("per day", "(tpd)", "(rpd)")
+_TRY_AGAIN_IN = re.compile(r"try again in (?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?")
 _MAX_REPORTED_VALIDATION_ERRORS = 3
 
 
@@ -56,12 +60,29 @@ class LLMCallFailed(LLMError):
     """Calls were made but no valid output was obtained within the retry bounds."""
 
 
-class RateLimited(Exception):
-    """Transport signal: the provider answered 429."""
+class DailyLimitReached(Exception):
+    """The provider's daily quota is used up, so the whole request stops at once.
+
+    Not an `LLMError`: no task, review or retry handles it; the pipeline turns it into a clear HTTP 429.
+    """
 
     def __init__(self, retry_after_s: float | None) -> None:
-        super().__init__(f"rate limited (retry after {retry_after_s}s)")
+        wait = f"in {_describe_wait(retry_after_s)}" if retry_after_s else "once the daily limit resets"
+        self.reason = (
+            "Today's free usage limit for the AI model has been used up. "
+            f"It resets automatically; please try again {wait}."
+        )
+        super().__init__(self.reason)
         self.retry_after_s = retry_after_s
+
+
+class RateLimited(Exception):
+    """Transport signal: the provider answered 429. `daily` means the daily quota, not the per-minute one."""
+
+    def __init__(self, retry_after_s: float | None, *, daily: bool = False) -> None:
+        super().__init__(f"rate limited (retry after {retry_after_s}s{', daily limit' if daily else ''})")
+        self.retry_after_s = retry_after_s
+        self.daily = daily
 
 
 class ProviderError(Exception):
@@ -247,7 +268,7 @@ class GroqTransport:
                 timeout=timeout_s,
             )
         except groq.RateLimitError as exc:
-            raise RateLimited(_retry_after_s(exc)) from exc
+            raise rate_limited_from(exc) from exc
         except groq.APIStatusError as exc:
             raise _map_status_error(exc) from exc
         except groq.APITimeoutError as exc:
@@ -264,12 +285,39 @@ class GroqTransport:
         )
 
 
+def rate_limited_from(exc: groq.RateLimitError) -> RateLimited:
+    """Tell a used-up daily quota from the per-minute limit, and find how long to wait."""
+    details = f"{exc.message} {exc.body}".lower()
+    daily = any(marker in details for marker in _DAILY_LIMIT_MARKERS)
+    return RateLimited(_retry_after_s(exc) or _try_again_in_s(details), daily=daily)
+
+
 def _retry_after_s(exc: groq.RateLimitError) -> float | None:
     value = exc.response.headers.get("retry-after")
     try:
         return float(value) if value is not None else None
     except ValueError:
         return None
+
+
+def _try_again_in_s(details: str) -> float | None:
+    """Read "try again in 1h2m3.5s" from the error text; None if it isn't there."""
+    match = _TRY_AGAIN_IN.search(details)
+    if match is None or not any(match.groups()):
+        return None
+    hours, minutes, seconds = (float(part or 0) for part in match.groups())
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def _describe_wait(seconds: float) -> str:
+    minutes = math.ceil(seconds / 60)
+    if minutes <= 1:
+        return "about a minute"
+    if minutes < 60:
+        return f"about {minutes} minutes"
+    hours, rest = divmod(minutes, 60)
+    hours_text = "1 hour" if hours == 1 else f"{hours} hours"
+    return f"about {hours_text}" + (f" {rest} minutes" if rest else "")
 
 
 def _map_status_error(exc: groq.APIStatusError) -> Exception:
@@ -357,8 +405,8 @@ class LLMClient:
     ) -> ModelT:
         """Send `messages` and return the reply parsed as `schema`.
 
-        Raises BudgetExhausted (call not made), ContextTooLarge (not sent / not resent)
-        or LLMCallFailed (retries exhausted).
+        Raises BudgetExhausted (call not made), ContextTooLarge (not sent / not resent),
+        LLMCallFailed (retries exhausted) or DailyLimitReached (the provider's daily quota is used up).
         """
         base_messages = _with_schema_instructions(messages, schema)
         feedback: str | None = None
@@ -463,7 +511,10 @@ class LLMClient:
         return estimate_prompt_tokens(messages, self._settings) + max_completion_tokens
 
     def _wait_for_rate_limit(self, exc: RateLimited, waits: int, purpose: str, budget: RequestBudget) -> None:
-        """Honour retry-after within the wait limit and the deadline."""
+        """Honour retry-after within the wait limit and the deadline; a daily limit stops at once."""
+        if exc.daily:
+            logger.warning("%s: daily usage limit reached; stopping the request", purpose)
+            raise DailyLimitReached(exc.retry_after_s)
         if waits > self._settings.llm_max_rate_limit_waits:
             raise LLMCallFailed(f"{purpose}: still rate limited after {waits - 1} waits")
         wait_s = exc.retry_after_s

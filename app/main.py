@@ -22,6 +22,7 @@ STATIC_DIR = PROJECT_ROOT / "static"
 _ERROR_RESPONSES = {
     400: {"model": AgentResponse, "description": "Refused by an input screen (no LLM call made)"},
     422: {"description": "Invalid body, or the request is not asking for a document"},
+    429: {"model": AgentResponse, "description": "The model provider's free daily usage limit is used up"},
     502: {"model": AgentResponse, "description": "The agent could not produce a valid document"},
 }
 

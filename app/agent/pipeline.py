@@ -12,7 +12,7 @@ from app.config import Settings
 from app.docx_builder import RenderError
 from app.grounding import check_completeness, check_gate, ground_sections, remove_duplicate_records
 from app.guardrails import InputRejected, screen_request
-from app.llm import LLMClient, LLMError, RequestBudget
+from app.llm import DailyLimitReached, LLMClient, LLMError, RequestBudget
 from app.schemas import (
     AgentResponse,
     Analysis,
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 HTTP_OK = 200
 HTTP_REJECTED = 400
 HTTP_NOT_A_DOCUMENT = 422
+HTTP_DAILY_LIMIT = 429
 HTTP_FAILED = 502
 
 CODE_STEPS = (
@@ -103,6 +104,9 @@ class AgentPipeline:
         except _StepFailed as exc:
             logger.warning("Request failed: %s", exc.reason)
             return self._result(run, "failed", exc.reason, exc.http_status)
+        except DailyLimitReached as exc:
+            logger.warning("Request stopped: %s", exc.reason)
+            return self._result(run, "failed", exc.reason, HTTP_DAILY_LIMIT)
 
         status: RunStatus = "partial" if run.partial_reasons else "success"
         return self._result(run, status, self._summary(run, sections, status), HTTP_OK, document_name)

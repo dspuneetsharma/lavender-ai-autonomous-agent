@@ -21,15 +21,18 @@ a training approach for the sales team, and success metrics.`,
 const STATUS_ICONS = { done: "✓", failed: "✕", skipped: "–" };
 const ELAPSED_TICK_MS = 1000;
 const HTTP_NOT_A_DOCUMENT = 422;
+const HTTP_DAILY_LIMIT = 429;
 
 // Small talk is answered here in the browser, so a greeting never costs an LLM call.
 // A message counts as small talk only if every word is in these lists.
 const SMALL_TALK_MAX_WORDS = 8;
 const GREETING_WORDS = new Set([
-  "hi", "hii", "hello", "hey", "heya", "hiya", "yo", "morning", "afternoon", "evening",
+  "hi", "hii", "hello", "hey", "heya", "hiya", "yo", "howdy", "namaste", "morning", "afternoon",
+  "evening",
 ]);
-const HOW_ARE_YOU_WORDS = new Set(["how", "whats", "sup", "wassup"]);
+const HOW_ARE_YOU_WORDS = new Set(["how", "hows", "whats", "sup", "wassup"]);
 const THANKS_WORDS = new Set(["thanks", "thank", "thx", "ty"]);
+const BYE_WORDS = new Set(["bye", "byee", "goodbye", "goodnight", "night", "cya", "see", "later"]);
 const FILLER_WORDS = new Set([
   "there", "good", "are", "r", "you", "u", "ya", "doing", "today", "is", "it", "going", "up",
   "so", "much", "lavender", "again", "dear", "all", "ok", "okay", "great",
@@ -48,7 +51,67 @@ const SMALL_TALK_REPLIES = {
     "You're welcome! Happy to help with another document anytime.",
     "Glad I could help! Just ask whenever you need another document.",
   ],
+  bye: ["Goodbye! Come back whenever you need a document."],
 };
+
+// Short questions about Lavender itself are also answered here, from fixed text, so the answers
+// cost nothing and never get a fact about the project wrong. Checked in order; first match wins.
+const ABOUT_MAX_WORDS = 12;
+const SELF = "(you|lavender|this|it)";
+const DOCUMENT_WORDS = /\b(write|draft|create|generate|prepare|make|minutes|report|proposal|agenda|memo|document|doc|docx)\b/;
+const ABOUT_REPLIES = [
+  {
+    pattern: new RegExp(
+      `\\b(how (were|was|are) ${SELF} (built|made|created|developed|designed)` +
+      `|who (built|made|created|developed) ${SELF}|which (model|llm)|what (model|llm)` +
+      "|tech(nology)? stack|technical details?|your architecture)\\b",
+    ),
+    reply: [
+      "I'm Lavender, an autonomous document agent built by Puneet.",
+      "",
+      "Tech stack",
+      "• Backend: Python, FastAPI, Uvicorn",
+      "• AI model: OpenAI gpt-oss-120b on Groq (JSON mode, low reasoning effort for speed)",
+      "• Data contracts: Pydantic v2 schemas for every model reply, retried automatically if invalid",
+      "• Documents: python-docx, which creates real Word (.docx) files",
+      "• Config: pydantic-settings, with every limit set in .env",
+      "• Frontend: plain HTML, CSS and JavaScript, with no framework",
+      "• Testing: pytest and httpx, 130+ offline tests using a fake LLM, so no API key is needed",
+      "",
+      "How a request flows",
+      "Analyze → Plan (2-6 sections, in dependency order) → Write each section with tools " +
+        "(write_section, build_table) → Fact-check in code → AI review → Repair and re-verify → " +
+        "Completeness gate → Word file",
+      "",
+      "Guardrails",
+      "• Unsafe or prompt-injection requests are blocked before any AI call.",
+      "• Every name, date and number is checked against your request; anything missing becomes " +
+        "\"To be confirmed\", never invented.",
+      "• Token budgeting: a per-minute pacer, a 40K-token ceiling per request and a time limit.",
+    ].join("\n"),
+  },
+  {
+    pattern: new RegExp(
+      `\\b(how (do|can|should) i (use|start with|work with) ${SELF}|how to use ${SELF}` +
+      `|how (do|does) ${SELF} work|how do i (start|begin|get started)|getting started)\\b`,
+    ),
+    reply:
+      "Just describe the document you need, with the facts: names, dates, decisions, numbers. " +
+      "For example: \"Minutes for Monday's sales meeting, Priya and Omar attended, we agreed to launch " +
+      "on March 3.\" I'll take about 2 to 5 minutes and give you a Word file. Anything you didn't tell " +
+      "me is marked \"To be confirmed\", never made up.",
+  },
+  {
+    pattern: new RegExp(
+      "\\b(who are you|what are you|what is lavender|what can (you|lavender) do|what do you do" +
+      "|what are your (features|capabilities|skills)|tell me about (yourself|lavender)|introduce yourself)\\b",
+    ),
+    reply:
+      "I'm Lavender, an AI agent made by Puneet. I write Word documents from a plain request: meeting " +
+      "minutes, project plans, proposals and reports. I plan the sections, write them, check every name, " +
+      "date and number against what you told me, fix problems, and hand you a .docx to download.",
+  },
+];
 const OFF_TOPIC_REPLY =
   "I'd kindly request you to use me for documents, such as meeting minutes, project plans or reports. " +
   "For other tasks, Puneet will need to give me new skills first. Once that happens, " +
@@ -179,12 +242,27 @@ function smallTalkKind(text) {
   const words = text.toLowerCase().replace(/['’]/g, "").split(/[^a-z]+/).filter(Boolean);
   if (words.length === 0 || words.length > SMALL_TALK_MAX_WORDS) return null;
   const known = (word) => GREETING_WORDS.has(word) || HOW_ARE_YOU_WORDS.has(word) ||
-    THANKS_WORDS.has(word) || FILLER_WORDS.has(word);
+    THANKS_WORDS.has(word) || BYE_WORDS.has(word) || FILLER_WORDS.has(word);
   if (!words.every(known)) return null;
   if (words.some((word) => THANKS_WORDS.has(word))) return "thanks";
+  if (words.some((word) => BYE_WORDS.has(word))) return "bye";
   if (words.some((word) => HOW_ARE_YOU_WORDS.has(word))) return "howAreYou";
   if (words.some((word) => GREETING_WORDS.has(word))) return "greeting";
   return null;
+}
+
+function aboutReply(text) {
+  const words = text.toLowerCase().replace(/['’]/g, "").split(/[^a-z0-9]+/).filter(Boolean);
+  if (words.length === 0 || words.length > ABOUT_MAX_WORDS) return null;
+  const sentence = words.join(" ");
+  if (DOCUMENT_WORDS.test(sentence)) return null; // "write minutes on how to use it" is a real request
+  const match = ABOUT_REPLIES.find(({ pattern }) => pattern.test(sentence));
+  return match ? match.reply : null;
+}
+
+function instantReply(text) {
+  const smallTalk = smallTalkKind(text);
+  return smallTalk ? pickOne(SMALL_TALK_REPLIES[smallTalk]) : aboutReply(text);
 }
 
 function pickOne(options) {
@@ -204,9 +282,9 @@ async function submit() {
   if (!text || busy) return;
   input.value = "";
   appendMessage("user", el("div", "bubble", text));
-  const smallTalk = smallTalkKind(text);
-  if (smallTalk) {
-    renderReply(pickOne(SMALL_TALK_REPLIES[smallTalk]));
+  const reply = instantReply(text);
+  if (reply) {
+    renderReply(reply);
     updateComposer();
     return;
   }
@@ -223,6 +301,7 @@ async function submit() {
     stopPending();
     // FastAPI's own 422 (invalid input) has no "status" field; the agent's "not a document" 422 does.
     if (response.status === HTTP_NOT_A_DOCUMENT && body && body.status) renderReply(OFF_TOPIC_REPLY);
+    else if (response.status === HTTP_DAILY_LIMIT && body && body.status) renderReply(body.message);
     else if (body && body.status) renderResult(body);
     else renderError(validationMessage(body));
   } catch {

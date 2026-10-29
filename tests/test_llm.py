@@ -1,5 +1,7 @@
 """LLM wrapper: retries with feedback, no resend on 413, pacing, deadline, token ceiling (plan groups 4-5)."""
 
+import groq
+import httpx
 import pytest
 from pydantic import BaseModel
 
@@ -8,12 +10,14 @@ from app.llm import (
     BudgetExhausted,
     Completion,
     ContextTooLarge,
+    DailyLimitReached,
     FakeLLM,
     LLMCallFailed,
     LLMClient,
     RateLimited,
     RequestBudget,
     TokenPacer,
+    rate_limited_from,
 )
 from fakes import FakeClock
 
@@ -84,6 +88,49 @@ def test_rate_limit_waits_for_retry_after_without_using_an_attempt(settings, clo
     assert _ask(client, budget).title == "ok"
     assert clock.sleeps == [2.5]
     assert [call.outcome for call in budget.calls] == ["rate_limited", "ok"]
+
+
+DAILY_LIMIT_TEXT = (
+    "Rate limit reached for model `openai/gpt-oss-120b` in organization `org_x` service tier `on_demand` "
+    "on tokens per day (TPD): Limit 200000, Used 199500, Requested 3200. Please try again in 14m2.5s."
+)
+MINUTE_LIMIT_TEXT = (
+    "Rate limit reached for model `openai/gpt-oss-120b` on tokens per minute (TPM): Limit 8000, "
+    "Used 7900, Requested 900. Please try again in 6.75s."
+)
+
+
+def _groq_429(message: str, retry_after: str | None = None) -> groq.RateLimitError:
+    headers = {"retry-after": retry_after} if retry_after else {}
+    response = httpx.Response(429, headers=headers, request=httpx.Request("POST", "https://api.groq.com"))
+    return groq.RateLimitError(message, response=response, body={"error": {"message": message}})
+
+
+def test_daily_limit_stops_at_once_with_a_clear_message(settings, clock) -> None:
+    client, fake = _client([RateLimited(842.5, daily=True), {"title": "never"}], settings, clock)
+
+    with pytest.raises(DailyLimitReached) as caught:
+        _ask(client, _budget(settings, clock))
+
+    assert clock.sleeps == []
+    assert len(fake.requests) == 1
+    assert caught.value.reason == (
+        "Today's free usage limit for the AI model has been used up. "
+        "It resets automatically; please try again in about 15 minutes."
+    )
+
+
+def test_daily_limit_without_a_wait_time_says_it_resets() -> None:
+    assert DailyLimitReached(None).reason.endswith("please try again once the daily limit resets.")
+    assert "in about 2 hours 5 minutes" in DailyLimitReached(7445).reason
+
+
+def test_groq_daily_429_is_told_apart_from_the_per_minute_one() -> None:
+    daily = rate_limited_from(_groq_429(DAILY_LIMIT_TEXT))
+    minute = rate_limited_from(_groq_429(MINUTE_LIMIT_TEXT, retry_after="7"))
+
+    assert (daily.daily, daily.retry_after_s) == (True, 842.5)  # read from "try again in 14m2.5s"
+    assert (minute.daily, minute.retry_after_s) == (False, 7.0)  # the header wins when present
 
 
 def test_pacer_waits_when_the_window_would_overflow(clock) -> None:

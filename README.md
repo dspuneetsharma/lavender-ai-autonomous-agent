@@ -2,7 +2,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688)
-![Tests](https://img.shields.io/badge/tests-132%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-136%20passing-brightgreen)
 
 An autonomous AI agent that turns a plain-language request ("Create meeting minutes for…", "Draft a proposal for…") into a finished,
 fact-checked Word document.
@@ -29,7 +29,7 @@ document that fails its own checks is never delivered.
 - Plan → write → ground → review → repair → render, with every LLM output validated by strict Pydantic schemas.
 - Four layers of guardrails enforced in code: input screens, plan validation, fact grounding and a final gate.
 - Token budgeting and a process-wide rate pacer built for a free-tier LLM API.
-- 132 offline tests with a fake LLM, plus measured live runs with the exact inputs and outputs in `samples/`.
+- 136 offline tests with a fake LLM, plus measured live runs with the exact inputs and outputs in `samples/`.
 
 ## How it works
 
@@ -97,6 +97,7 @@ python -m pytest
 | 200 | `partial` | Document delivered, but an optional section was dropped or a requested item had no source facts; the reason is in `message` and `warnings` |
 | 400 | `failed` | Refused by an input screen before any LLM call |
 | 422 | `failed` | Not a document request (one LLM call), or an invalid body (empty, too long) |
+| 429 | `failed` | The model provider's free daily usage limit is used up; the message says when to try again |
 | 502 | `failed` | No valid document could be produced; **no link is returned** |
 
 ---
@@ -171,7 +172,8 @@ Four layers, each enforced in code:
 - a per-request token ceiling and deadline;
 - a per-call cap: an oversized call is never sent, and a provider "too large" error is never resent;
 - a process-wide pacer that books tokens ahead so the per-minute limit isn't hit;
-- `retry-after` honoured on 429, at most 3 waits.
+- `retry-after` honoured on 429, at most 3 waits. A **daily** limit (Groq's "per day" 429) stops the request at
+  once with HTTP 429 and "Today's free usage limit ... please try again in about N minutes".
 
 **Self-check:** a review call looks for unsupported facts, missing requested items, unlabelled
 proposals, contradictions between sections, content under the wrong heading and substantial duplication.
@@ -200,7 +202,7 @@ the old 300 s deadline (see DECISIONS.md, "Fix: budget limits sized for the Groq
 
 ### Offline code checks (pytest + FakeLLM)
 
-**132 tests, all passing in about 1.3 s, no warnings, no API key.** FakeLLM replaces only the network
+**136 tests, all passing in about 1.3 s, no warnings, no API key.** FakeLLM replaces only the network
 call, so the real retry, pacing, budget, planning, grounding, review, gate, rendering and API code all
 runs. Tests use code defaults (`.env` is ignored), so results don't depend on the machine.
 
@@ -293,8 +295,8 @@ part of `samples/`.
   requests fail clearly (502, "context too large") rather than being trimmed.
 - **Speed on the free tier:** about two section calls per minute, so 2–6 minutes per document.
 - **Daily quota on the free tier:** 200K tokens per day for `gpt-oss-120b`, about 8–20 documents (measured
-  runs use about 9–24K tokens; failed runs count too). When it runs out, Groq answers 429 with long waits and
-  the agent stops at the deadline with a clear reason. `GROQ_MODEL=openai/gpt-oss-20b` is a drop-in
+  runs use about 9–24K tokens; failed runs count too). When it runs out, the agent stops at once and says
+  the free daily limit is used up and when to try again. `GROQ_MODEL=openai/gpt-oss-20b` is a drop-in
   fallback with its own quota. The attempts table was measured on 120b; the UI screenshot run is on 20b.
 - **Grounding understands formats, not synonyms:** "8am-12pm" matches "8am to 12 pm" and "31 March"
   matches "March 31", but "end of March" or a reworded name becomes "To be confirmed". Only structured
@@ -307,14 +309,15 @@ part of `samples/`.
   was rejected because it could delete legitimate constraints).
 - Single process: the pacer is per process; no authentication; generated files in `outputs/` are not
   cleaned up.
-- The UI answers greetings from a fixed word list in the browser; everything else goes to the agent.
+- The UI answers greetings, goodbyes and short questions about Lavender itself (what it can do, how to use
+  it, how it was built) from fixed text in the browser; everything else goes to the agent.
 
 ## Project layout
 
 ```
 app/                FastAPI app, settings, LLM wrapper, guardrails, grounding, tools, agent/, docx builder
 static/             Chat UI (Lavender)
-tests/              132 offline tests (pytest + FakeLLM)
+tests/              136 offline tests (pytest + FakeLLM)
 samples/            Demo requests, and per attempt the JSON response and Word file
 docs/DECISIONS.md   Decisions, rejected alternatives, design Q&A
 .env.example        Every setting, with comments

@@ -621,3 +621,34 @@ An owner/due/value field is supported if every time, date, number and word in it
 
 > **Q: Why not let the LLM decide whether "8am-12pm" matches the request?**
 > A: The checker must be independent of the writer, free and repeatable. Code turns every format into one standard form and then compares exactly, so it accepts real facts written differently and still blocks invented ones.
+
+## UI add-on: answers about Lavender itself, more greetings and goodbyes (user request, UI only)
+
+Questions like "what can you do?", "how do I use you?" and "how were you built?" used to go to the agent, which spent one LLM call to decide they weren't document requests and then showed the off-topic reply. They are now answered in the browser from three fixed texts (who Lavender is and that Puneet made it; how to use it; the tech stack and pipeline). Greetings now also cover "how's it going", "howdy" and "namaste", and goodbyes ("bye", "good night", "see you later") get a reply.
+
+- **Safety of the question check:** only messages of 12 words or fewer, matched against specific phrases about "you/Lavender/this/it", and never when the message contains a document word (write, create, minutes, report...). So "write minutes on how to use it" and "how do I use HubSpot" still go to the agent.
+- **Rejected:** letting the LLM answer from a fact sheet (costs quota on every question and could state something wrong about the project during a demo).
+- **Checked:** 26 messages in a Node script, and `node --check` passes. Not covered by pytest (browser code).
+
+> **Q: Why fixed answers instead of the LLM?**
+> A: Questions about the product have one correct answer that I control. Fixed text is instant, free and can't be wrong or changed by a prompt injection; anything outside those phrases still goes to the agent.
+
+## Fix: a used-up daily quota says so clearly (code + UI)
+
+When the Groq free daily quota ran out, the 429 was treated like the per-minute limit: the retry-after was hours or minutes long, the wait "would pass the deadline", tasks were skipped one by one, and the user saw a red FAILED card with a technical reason.
+
+**Fix:**
+- `GroqTransport` tells the two 429s apart: Groq's daily one says "per day" / "(TPD)" / "(RPD)". The wait comes from the `retry-after` header, or else from "try again in 14m2.5s" in the error text.
+- A daily 429 raises `DailyLimitReached` at once: no waiting, no further calls. It is deliberately not an `LLMError`, so no task, review or retry swallows it; the pipeline returns HTTP 429 with "Today's free usage limit for the AI model has been used up. It resets automatically; please try again in about N minutes."
+- The UI shows that message as a normal reply instead of a FAILED card.
+- The per-minute 429 is unchanged (waits for retry-after, at most 3 waits).
+
+- **Rejected:** a new `RunStatus` value (changes the API contract; HTTP 429 plus the message is enough and standard); checking quota before each run (Groq exposes only per-minute headers, not the daily balance).
+- **Code-verified (offline):** 136/136 tests pass, including a mid-run daily limit (stops after 2 calls, HTTP 429, clear message) and real `groq.RateLimitError` objects for the daily and per-minute texts. **Not verified live:** the exact wording of Groq's daily 429 is matched on the text seen on 2026-10-23 ("tokens per day (TPD)").
+
+> **Q: Why is the daily limit not handled like other LLM errors?**
+> A: Other errors affect one call or one section, so the agent retries or skips. A used-up daily quota affects every call, so retrying only wastes time; stopping at once with a precise message is the honest answer.
+
+## UI: professional tech-stack answer
+
+"How were you built?", "tech stack", "which model" now answer with a structured reply: tech stack (FastAPI, Groq gpt-oss-120b in JSON mode, Pydantic v2, python-docx, pydantic-settings, plain JS, pytest), the request flow and the guardrails. Every line was checked against the code. It says "130+ tests" so it stays true as tests are added.

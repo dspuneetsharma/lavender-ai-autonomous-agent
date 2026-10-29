@@ -8,7 +8,7 @@ from docx import Document
 from app.agent.review import REVIEW_PROMPT, ReviewIncomplete, review_and_repair
 from app.config import Settings
 from app.docx_builder import DocxRenderer, RenderError
-from app.llm import RequestBudget, estimate_prompt_tokens
+from app.llm import RateLimited, RequestBudget, estimate_prompt_tokens
 from app.schemas import Analysis, Plan, ProposalLabel, Section
 from sample_data import (
     ANALYSIS,
@@ -96,6 +96,17 @@ def test_required_task_failure_fails_the_run_with_no_link(run_pipeline) -> None:
     assert run.result.http_status == 502
     assert run.result.document_name is None
     assert [(r.id, r.status) for r in run.result.response.plan[:2]] == [("T1", "failed"), ("T2", "skipped")]
+
+
+def test_daily_limit_mid_run_stops_with_429_and_a_clear_message(run_pipeline) -> None:
+    run = run_pipeline([ANALYSIS, RateLimited(600, daily=True), TABLE, NO_ISSUES])
+
+    assert run.result.http_status == 429
+    assert run.result.response.status == "failed"
+    assert run.result.response.message.startswith("Today's free usage limit for the AI model has been used up.")
+    assert "about 10 minutes" in run.result.response.message
+    assert len(run.fake.requests) == 2  # no further calls after the daily limit
+    assert run.result.document_name is None
 
 
 def test_required_task_skipped_for_time_fails_the_run(run_pipeline, settings: Settings) -> None:
