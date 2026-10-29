@@ -4,6 +4,10 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688)
 ![Tests](https://img.shields.io/badge/tests-136%20passing-brightgreen)
 
+**▶ Live demo: [lavender-ai-autonomous-agent.onrender.com](https://lavender-ai-autonomous-agent.onrender.com)**
+<br><sub>Free hosting: the first visit may take about 30 s to wake the server. A document takes 2–6 minutes.
+The free AI quota is shared by all visitors, so if it's used up, Lavender says when to try again.</sub>
+
 An autonomous AI agent that turns a plain-language request ("Create meeting minutes for…", "Draft a proposal for…") into a finished,
 fact-checked Word document.
 
